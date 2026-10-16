@@ -1,0 +1,9 @@
+*.zip
+.env
+.env.*
+!.env.example
+backups/
+private/
+*backup*.json
+.DS_Store
+Thumbs.db
