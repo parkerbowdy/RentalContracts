@@ -1,8 +1,11 @@
 const $ = id => document.getElementById(id);
+const issuerStates = Object.fromEntries('636000:VA 636001:NY 636002:MA 636003:MD 636004:NC 636005:SC 636006:CT 636007:LA 636008:MT 636009:NM 636010:FL 636011:DE 636014:CA 636015:TX 636018:IA 636019:GU 636021:AR 636022:KS 636023:OH 636024:VT 636025:PA 636026:AZ 636029:OR 636030:MO 636031:WI 636032:MI 636033:AL 636034:ND 636035:IL 636036:NJ 636037:IN 636038:MN 636039:NH 636040:UT 636041:ME 636042:SD 636043:DC 636045:WA 636046:KY 636047:HI 636049:NV 636050:ID 636051:MS 636052:RI 636053:TN 636054:NE 636055:GA 636058:OK 636059:AK 636060:WY 636061:WV 636062:VI 604427:AS 604430:MP 604431:PR'.split(' ').map(pair => pair.split(':')));
 const codes = 'DAA DAB DAC DAD DAE DAF DAG DAH DAI DAJ DAK DAL DAM DAN DAO DAP DAQ DAR DAS DAT DAU DAV DAW DAX DAY DAZ DBA DBB DBC DBD DBE DBF DBG DBH DBI DBJ DBK DBL DBM DBN DBO DBP DBQ DBR DBS DCA DCB DCC DCD DCE DCF DCG DCH DCI DCJ DCK DCL DCM DCN DCO DCP DCQ DCR DCS DCT DCU DDA DDB DDC DDD DDE DDF DDG DDH DDI DDJ DDK DDL'.split(' ');
 const known = new Set(codes);
 function report(text, bad = false) { const s = $('status'); if (s) { s.textContent = text; s.className = bad ? 'error' : 'ok'; s.scrollIntoView({block:'nearest'}); } }
 function decode(raw) {
+ const header = raw.match(/ANSI\s*(\d{6})/);
+ const issuer = header ? issuerStates[header[1]] || '' : '';
  const text = raw.replace(/\r\n?/g, '\n').replace(/[\x1c-\x1f\t]/g, '\n');
  const lines = text.split('\n').map(x => x.trim()).filter(x => known.has(x.slice(0,3)));
  const fields = Object.create(null);
@@ -29,7 +32,7 @@ function decode(raw) {
  if (y < 1900 || y > 2200 || date.getUTCFullYear() !== y || date.getUTCMonth() !== m-1 || date.getUTCDate() !== day) throw Error('Invalid expiration date. Enter details manually.');
  if (!/^[A-Z]{2}$/.test(get('DAJ'))) throw Error('Could not read the address state/province reliably. Enter details manually.');
  const expiration = [y,String(m).padStart(2,'0'),String(day).padStart(2,'0')].join('-');
- return {recovered:!separated, values:{name:[first,get('DAD'),last,get('DCU')].filter(Boolean).join(' '),street:[get('DAG'),get('DAH')].filter(Boolean).join(', '),city:get('DAI'),state:get('DAJ'),zip:get('DAK'),license:get('DAQ'),expiration,issuer:''}};
+ return {recovered:!separated, values:{name:[first,get('DAD'),last,get('DCU')].filter(Boolean).join(' '),street:[get('DAG'),get('DAH')].filter(Boolean).join(', '),city:get('DAI'),state:get('DAJ'),zip:get('DAK'),license:get('DAQ'),expiration,issuer}};
 }
 document.addEventListener('click', event => {
  const button = event.target instanceof Element ? event.target.closest('#parse') : null;
@@ -49,6 +52,7 @@ document.addEventListener('click', event => {
   if ($('idPreview')) $('idPreview').removeAttribute('src');
   $('barcode').value = '';
   if ($('idNote')) $('idNote').textContent = 'Attach the image of the ID just scanned.';
-  report((result.recovered ? 'Joined-field scan recovered: verify every field against the ID. ' : 'Barcode filled: verify every field against the ID. ') + 'Enter phone and license issuing state manually, attach the ID image, finish edits and consent, then confirm times and sign.');
+  const issuerNote = result.values.issuer ? 'Issuing state detected: ' + result.values.issuer + '. Verify it against the ID. ' : 'Issuing authority not recognized; enter license issuing state manually. ';
+  report((result.recovered ? 'Joined-field scan recovered: verify every field against the ID. ' : 'Barcode filled: verify every field against the ID. ') + issuerNote + 'Enter phone, attach the ID image, finish edits and consent, then confirm times and sign.');
  } catch (error) { report(error.message, true); }
 }, true);
