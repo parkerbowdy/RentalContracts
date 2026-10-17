@@ -3,3 +3,11 @@ const $=id=>document.getElementById(id);
 let username='';
 document.querySelectorAll('#stations button').forEach(b=>b.onclick=()=>{username=b.dataset.user;document.querySelectorAll('#stations button').forEach(x=>x.classList.toggle('active',x===b));$('pinStatus').textContent='PIN for '+username;$('pin').focus()});
 $('pinForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;$('pinStatus').textContent='Signing in...';try{const r=await fetch(URL+'/functions/v1/staff-pin-login',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({username,pin:$('pin').value})});const v=await r.json();if(!r.ok||!v.session)throw Error(v.error||'Invalid username or PIN.');sessionStorage.setItem('jt_session',JSON.stringify(v.session));$('pinScreen').classList.add('hidden');$('pinStatus').textContent='Welcome, '+v.employee.display_name;await import('./app.js')}catch(err){$('pinStatus').className='error';$('pinStatus').textContent=err.message}finally{button.disabled=false;$('pin').value=''}};
+if(sessionStorage.getItem('jt_session')){
+ $('pinScreen').classList.add('hidden');
+ import('./app.js').catch(err=>{
+  $('pinScreen').classList.remove('hidden');
+  $('pinStatus').className='error';
+  $('pinStatus').textContent='Unable to restore the rental app: '+err.message;
+ });
+}
