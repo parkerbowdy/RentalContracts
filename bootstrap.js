@@ -7,6 +7,7 @@
   }
   window.addEventListener('error', function () { fail('The application reported a startup or script error. No reset of Supabase is needed.'); });
   window.addEventListener('unhandledrejection', function () { fail('A request or application operation failed. Check your connection and try signing in again.'); });
+  import('./staff-tools.js').catch(function () { fail('Could not load item import and staff tools. Refresh or check the deployment.'); });
   import('./app.js').catch(function () {
     fail('Could not load the rental application. Confirm app.js and config.js are beside index.html and refresh this page.');
   });
