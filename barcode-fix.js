@@ -3,6 +3,19 @@ const issuerStates = Object.fromEntries('636000:VA 636001:NY 636002:MA 636003:MD
 const codes = 'DAA DAB DAC DAD DAE DAF DAG DAH DAI DAJ DAK DAL DAM DAN DAO DAP DAQ DAR DAS DAT DAU DAV DAW DAX DAY DAZ DBA DBB DBC DBD DBE DBF DBG DBH DBI DBJ DBK DBL DBM DBN DBO DBP DBQ DBR DBS DCA DCB DCC DCD DCE DCF DCG DCH DCI DCJ DCK DCL DCM DCN DCO DCP DCQ DCR DCS DCT DCU DDA DDB DDC DDD DDE DDF DDG DDH DDI DDJ DDK DDL'.split(' ');
 const known = new Set(codes);
 function report(text, bad = false) { const s = $('status'); if (s) { s.textContent = text; s.className = bad ? 'error' : 'ok'; s.scrollIntoView({block:'nearest'}); } }
+function protectKentuckyNames(body, matches, issuer) {
+ if (issuer !== 'KY') return matches;
+ const pattern = /DCS([A-Z][A-Z ,.'-]{0,79})DDE([NTU])DAC([A-Z][A-Z ,.'-]{0,79})DDF([NTU])DAD([A-Z ,.'-]{0,80})DDG([NTU])(?=DCA)/g;
+ const blocks = Array.from(body.matchAll(pattern));
+ if (blocks.length !== 1) return matches;
+ const block = blocks[0], spans = [];
+ let cursor = block.index;
+ for (const [label, value] of [['DCS',block[1]],['DDE',block[2]],['DAC',block[3]],['DDF',block[4]],['DAD',block[5]],['DDG',block[6]]]) {
+  if (['DCS','DAC','DAD'].includes(label)) spans.push([cursor + 3, cursor + 3 + value.length]);
+  cursor += 3 + value.length;
+ }
+ return matches.filter(match => !spans.some(([start,end]) => match.index >= start && match.index < end));
+}
 function decode(raw) {
  const header = raw.match(/ANSI\s*(\d{6})/);
  const issuer = header ? issuerStates[header[1]] || '' : '';
@@ -17,7 +30,7 @@ function decode(raw) {
   const start = text.indexOf('DAQ');
   if (start < 0) throw Error('License number field not found. Scan an AAMVA ID or enter details manually.');
   let body = text.slice(start).split(/\n\s*Z[A-Z]/)[0];
-  let matches = Array.from(body.matchAll(new RegExp(codes.join('|'), 'g')));
+  let matches = protectKentuckyNames(body, Array.from(body.matchAll(new RegExp(codes.join('|'), 'g'))), issuer);
   const dda = matches.filter(m => m[0] === 'DDA');
   if (dda.length > 1) {
    const cut = dda[0].index, before = matches.filter(m => m.index < cut), after = matches.filter(m => m.index >= cut);
