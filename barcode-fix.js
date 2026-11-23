@@ -16,6 +16,29 @@ function protectKentuckyNames(body, matches, issuer) {
  }
  return matches.filter(match => !spans.some(([start,end]) => match.index >= start && match.index < end));
 }
+function protectKentuckyAddress(body, matches, issuer) {
+ if (issuer !== 'KY') return matches;
+ const fail = () => { throw Error('Barcode diagnostic B4: address boundaries could not be confirmed. No fields filled. Enter details manually.'); };
+ if (body.length > 20000) fail();
+ const anchors = Array.from(body.matchAll(/DAJ([A-Z]{2})DAK(\d{5}(?:-?\d{4})? *)(?=DCF)/g));
+ if (anchors.length !== 1) fail();
+ const anchor = anchors[0], end = anchor.index + anchor[0].length;
+ const starts = Array.from(body.slice(0,anchor.index).matchAll(/(?=DAG)/g));
+ const cities = Array.from(body.slice(0,anchor.index).matchAll(/(?=DAI)/g));
+ const candidates = [];
+ for (const start of starts) for (const city of cities) {
+  if (city.index <= start.index + 3) continue;
+  const street = body.slice(start.index + 3,city.index), town = body.slice(city.index + 3,anchor.index);
+  if (!/^[A-Z0-9 .,'/#&()-]{1,80}$/.test(street) || !/[A-Z0-9]/.test(street) || street.includes('DAH')) continue;
+  if (!/^[A-Z][A-Z .'-]{0,39}$/.test(town)) continue;
+  candidates.push({start:start.index,city:city.index});
+  if (candidates.length > 1) fail();
+ }
+ if (candidates.length !== 1) fail();
+ const chosen = candidates[0];
+ const boundaries = [['DAG',chosen.start],['DAI',chosen.city],['DAJ',anchor.index],['DAK',anchor.index + 5]].map(([code,index]) => Object.assign([code],{index}));
+ return matches.filter(match => match.index + 3 <= chosen.start || match.index >= end).concat(boundaries).sort((a,b) => a.index - b.index);
+}
 function decode(raw) {
  const header = raw.match(/ANSI\s*(\d{6})/);
  const issuer = header ? issuerStates[header[1]] || '' : '';
@@ -31,6 +54,7 @@ function decode(raw) {
   if (start < 0) throw Error('License number field not found. Scan an AAMVA ID or enter details manually.');
   let body = text.slice(start).split(/\n\s*Z[A-Z]/)[0];
   let matches = protectKentuckyNames(body, Array.from(body.matchAll(new RegExp(codes.join('|'), 'g'))), issuer);
+  matches = protectKentuckyAddress(body, matches, issuer);
   const dda = matches.filter(m => m[0] === 'DDA');
   if (dda.length > 1) {
    const cut = dda[0].index, before = matches.filter(m => m.index < cut), after = matches.filter(m => m.index >= cut);
