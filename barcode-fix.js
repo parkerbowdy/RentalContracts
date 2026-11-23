@@ -10,13 +10,22 @@ function decode(raw) {
  const lines = text.split('\n').map(x => x.trim()).filter(x => known.has(x.slice(0,3)));
  const fields = Object.create(null);
  const separated = lines.some(x => x.startsWith('DAQ')) && lines.some(x => x.startsWith('DCS'));
- const put = (k,v) => { if (k in fields) throw Error('Barcode diagnostic B2: repeated field ' + k + '; mode=' + (separated ? 'line-separated' : 'joined-field recovery') + '; separators=' + (/[\r\n\x1c-\x1f\t]/.test(raw) ? 'present' : 'absent') + '; ANSI headers=' + Math.min((raw.match(/ANSI\s*\d{6}/g) || []).length, 9) + '. No fields filled. Report this message only, not the barcode text.'); fields[k] = v.trim(); };
+ let tailExcluded = false;
+ const put = (k,v) => { if (k in fields) throw Error('Barcode diagnostic B3: repeated field ' + k + '; mode=' + (separated ? 'line-separated' : 'joined-field recovery') + '; separators=' + (/[\r\n\x1c-\x1f\t]/.test(raw) ? 'present' : 'absent') + '; ANSI headers=' + Math.min((raw.match(/ANSI\s*\d{6}/g) || []).length, 9) + '; tail excluded=' + (tailExcluded ? 'yes' : 'no') + '. No fields filled. Report this message only, not the barcode text.'); fields[k] = v.trim(); };
  if (separated) { for (const line of lines) put(line.slice(0,3), line.slice(3)); }
  else {
   const start = text.indexOf('DAQ');
   if (start < 0) throw Error('License number field not found. Scan an AAMVA ID or enter details manually.');
-  const body = text.slice(start).split(/\n\s*Z[A-Z]/)[0];
-  const matches = Array.from(body.matchAll(new RegExp(codes.join('|'), 'g')));
+  let body = text.slice(start).split(/\n\s*Z[A-Z]/)[0];
+  let matches = Array.from(body.matchAll(new RegExp(codes.join('|'), 'g')));
+  const dda = matches.filter(m => m[0] === 'DDA');
+  if (dda.length > 1) {
+   const cut = dda[0].index, before = matches.filter(m => m.index < cut), after = matches.filter(m => m.index >= cut);
+   const count = k => before.filter(m => m[0] === k).length;
+   const used = new Set(['DAQ','DAC','DCT','DCS','DAB','DAD','DCU','DAG','DAH','DAI','DAJ','DAK','DBA','DCG']);
+   const complete = ['DAQ','DBA','DAG','DAI','DAJ','DAK'].every(k => count(k) === 1) && count('DAC') + count('DCT') === 1 && count('DCS') + count('DAB') === 1;
+   if (complete && !after.some(m => used.has(m[0]))) { body = body.slice(0,cut); matches = before; tailExcluded = true; }
+  }
   matches.forEach((m,i) => put(m[0], body.slice(m.index + 3, i+1 < matches.length ? matches[i+1].index : body.length)));
  }
  const get = k => fields[k] || '';
@@ -32,7 +41,7 @@ function decode(raw) {
  if (y < 1900 || y > 2200 || date.getUTCFullYear() !== y || date.getUTCMonth() !== m-1 || date.getUTCDate() !== day) throw Error('Invalid expiration date. Enter details manually.');
  if (!/^[A-Z]{2}$/.test(get('DAJ'))) throw Error('Could not read the address state/province reliably. Enter details manually.');
  const expiration = [y,String(m).padStart(2,'0'),String(day).padStart(2,'0')].join('-');
- return {recovered:!separated, values:{name:[first,get('DAD'),last,get('DCU')].filter(Boolean).join(' '),street:[get('DAG'),get('DAH')].filter(Boolean).join(', '),city:get('DAI'),state:get('DAJ'),zip:get('DAK'),license:get('DAQ'),expiration,issuer}};
+ return {recovered:!separated,tailExcluded, values:{name:[first,get('DAD'),last,get('DCU')].filter(Boolean).join(' '),street:[get('DAG'),get('DAH')].filter(Boolean).join(', '),city:get('DAI'),state:get('DAJ'),zip:get('DAK'),license:get('DAQ'),expiration,issuer}};
 }
 document.addEventListener('click', event => {
  const button = event.target instanceof Element ? event.target.closest('#parse') : null;
@@ -53,6 +62,6 @@ document.addEventListener('click', event => {
   $('barcode').value = '';
   if ($('idNote')) $('idNote').textContent = 'Attach the image of the ID just scanned.';
   const issuerNote = result.values.issuer ? 'Issuing state detected: ' + result.values.issuer + '. Verify it against the ID. ' : 'Issuing authority not recognized; enter license issuing state manually. ';
-  report((result.recovered ? 'Joined-field scan recovered: verify every field against the ID. ' : 'Barcode filled: verify every field against the ID. ') + issuerNote + 'Enter phone, attach the ID image, finish edits and consent, then confirm times and sign.');
+  report((result.recovered ? 'Joined-field scan recovered: verify every field against the ID. ' : 'Barcode filled: verify every field against the ID. ') + (result.tailExcluded ? 'Trailing metadata excluded. ' : '') + issuerNote + 'Enter phone, attach the ID image, finish edits and consent, then confirm information and sign.');
  } catch (error) { report(error.message, true); }
 }, true);
