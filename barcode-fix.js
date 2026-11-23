@@ -10,7 +10,7 @@ function decode(raw) {
  const lines = text.split('\n').map(x => x.trim()).filter(x => known.has(x.slice(0,3)));
  const fields = Object.create(null);
  const separated = lines.some(x => x.startsWith('DAQ')) && lines.some(x => x.startsWith('DCS'));
- const put = (k,v) => { if (k in fields) throw Error('Ambiguous barcode fields. Preserve scanner line breaks or enter details manually.'); fields[k] = v.trim(); };
+ const put = (k,v) => { if (k in fields) throw Error('Barcode diagnostic B2: repeated field ' + k + '; mode=' + (separated ? 'line-separated' : 'joined-field recovery') + '; separators=' + (/[\r\n\x1c-\x1f\t]/.test(raw) ? 'present' : 'absent') + '; ANSI headers=' + Math.min((raw.match(/ANSI\s*\d{6}/g) || []).length, 9) + '. No fields filled. Report this message only, not the barcode text.'); fields[k] = v.trim(); };
  if (separated) { for (const line of lines) put(line.slice(0,3), line.slice(3)); }
  else {
   const start = text.indexOf('DAQ');
